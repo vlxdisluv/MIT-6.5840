@@ -1,22 +1,15 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"time"
 )
 
 import "log"
 import "net/rpc"
 import "hash/fnv"
-
-type ByKey []KeyValue
-
-// for sorting by key.
-func (a ByKey) Len() int           { return len(a) }
-func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // Map functions return a slice of KeyValue.
 type KeyValue struct {
@@ -50,8 +43,25 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 
 		fmt.Printf("Processing file: %v\n", len(kva))
 
-		sort.Sort(ByKey(kva))
-		
+		encoders := make([]*json.Encoder, taskReply.NReduce)
+		for i := 0; i < taskReply.NReduce; i++ {
+			filename := fmt.Sprintf("mr-%d-%d", taskReply.TaskNumber, i)
+			outputFile, err := os.Create(filename)
+
+			if err != nil {
+				log.Fatalf("cannot create file %v", filename)
+			}
+
+			encoders[i] = json.NewEncoder(outputFile)
+		}
+
+		for _, kv := range kva {
+			bucket := ihash(kv.Key) % taskReply.NReduce
+			if err := encoders[bucket].Encode(&kv); err != nil {
+				log.Fatalf("cannot write to intermediate file: %v", err)
+			}
+		}
+
 		time.Sleep(5 * time.Second)
 	}
 }

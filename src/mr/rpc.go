@@ -17,6 +17,7 @@ type GetTaskReply struct {
 	FileName   string
 	TaskType   TaskType
 	TaskNumber int
+	NReduce    int
 }
 
 // Cook up a unique-ish UNIX-domain socket name

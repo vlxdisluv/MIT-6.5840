@@ -52,6 +52,7 @@ func (c *Coordinator) GetTask(_ *GetTaskArgs, reply *GetTaskReply) error {
 	reply.TaskNumber = mapTask.TaskNumber
 	reply.FileName = mapTask.FileName
 	reply.TaskType = TaskMap
+	reply.NReduce = c.nReduce
 	return nil
 }
 
