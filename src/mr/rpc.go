@@ -6,19 +6,26 @@ import "strconv"
 type TaskType int
 
 const (
-	TaskMap TaskType = iota
-	TaskReduce
+	Map TaskType = iota
+	Reduce
 )
 
-type GetTaskArgs struct {
+type TaskArgs struct {
 }
 
-type GetTaskReply struct {
+type TaskReply struct {
 	FileName   string
 	TaskType   TaskType
 	TaskNumber int
 	NReduce    int
 }
+
+type CompleteTaskArgs struct {
+	TaskType   TaskType
+	TaskNumber int
+}
+
+type CompleteTaskReply struct{}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.

@@ -42,7 +42,7 @@ type Coordinator struct {
 	reduceDone  bool
 }
 
-func (c *Coordinator) GetTask(_ *GetTaskArgs, reply *GetTaskReply) error {
+func (c *Coordinator) GetTask(_ *TaskArgs, reply *TaskReply) error {
 	mapTask, mapErr := c.getNextMapTask()
 
 	if mapErr != nil {
@@ -51,9 +51,38 @@ func (c *Coordinator) GetTask(_ *GetTaskArgs, reply *GetTaskReply) error {
 
 	reply.TaskNumber = mapTask.TaskNumber
 	reply.FileName = mapTask.FileName
-	reply.TaskType = TaskMap
+	reply.TaskType = Map
 	reply.NReduce = c.nReduce
 	return nil
+}
+
+func (c *Coordinator) CompleteTask(args *CompleteTaskArgs, _ *CompleteTaskReply) error {
+	var err error
+
+	switch args.TaskType {
+	case Map:
+		err = c.updateTaskStatus(Map, args.TaskNumber, Processed)
+	case Reduce:
+		err = c.updateTaskStatus(Reduce, args.TaskNumber, Processed)
+	default:
+		err = fmt.Errorf("unknown task type: %v", args.TaskType)
+	}
+
+	return err
+}
+
+func (c *Coordinator) updateTaskStatus(taskType TaskType, taskNumber int, newStatus TaskStatus) error {
+	if taskType == Map {
+		c.mapTasks[taskNumber].Status = newStatus
+		return nil
+	}
+
+	if taskType == Reduce {
+		c.reduceTasks[taskNumber].Status = newStatus
+		return nil
+	}
+
+	return fmt.Errorf("task type %v %v not found", taskType, taskNumber)
 }
 
 func (c *Coordinator) getNextMapTask() (mapTask *MapTaskInfo, err error) {

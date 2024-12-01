@@ -35,40 +35,28 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			break
 		}
 
-		content, err := os.ReadFile(taskReply.FileName)
+		switch taskReply.TaskType {
+		case Map:
+			err = handleMapTask(taskReply, mapf)
+		case Reduce:
+			err = fmt.Errorf("reduce handler is not implemented")
+		default:
+			fmt.Printf("unknown task type: %v\n", taskReply.TaskType)
+			err = fmt.Errorf("unsupported task type")
+		}
+
 		if err != nil {
-			log.Fatalf("cannot open %v", taskReply.FileName)
-		}
-		kva := mapf(taskReply.FileName, string(content))
-
-		fmt.Printf("Processing file: %v\n", len(kva))
-
-		encoders := make([]*json.Encoder, taskReply.NReduce)
-		for i := 0; i < taskReply.NReduce; i++ {
-			filename := fmt.Sprintf("mr-%d-%d", taskReply.TaskNumber, i)
-			outputFile, err := os.Create(filename)
-
-			if err != nil {
-				log.Fatalf("cannot create file %v", filename)
-			}
-
-			encoders[i] = json.NewEncoder(outputFile)
-		}
-
-		for _, kv := range kva {
-			bucket := ihash(kv.Key) % taskReply.NReduce
-			if err := encoders[bucket].Encode(&kv); err != nil {
-				log.Fatalf("cannot write to intermediate file: %v", err)
-			}
+			fmt.Printf("error processing task %v: %v\n", taskReply.TaskType, err)
+			break
 		}
 
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func GetTask() (*GetTaskReply, error) {
-	args := &GetTaskArgs{}
-	reply := &GetTaskReply{}
+func GetTask() (*TaskReply, error) {
+	args := &TaskArgs{}
+	reply := &TaskReply{}
 
 	ok := call("Coordinator.GetTask", args, reply)
 
@@ -77,6 +65,59 @@ func GetTask() (*GetTaskReply, error) {
 	}
 
 	return reply, nil
+}
+
+func CompleteTask(taskType TaskType, taskNumber int) (*CompleteTaskReply, error) {
+	args := &CompleteTaskArgs{
+		taskType,
+		taskNumber,
+	}
+	reply := &CompleteTaskReply{}
+
+	ok := call("Coordinator.CompleteTask", args, reply)
+
+	if !ok {
+		return nil, fmt.Errorf("task not found")
+	}
+
+	return reply, nil
+}
+
+func handleMapTask(taskReply *TaskReply, mapf func(string, string) []KeyValue) error {
+	content, err := os.ReadFile(taskReply.FileName)
+	if err != nil {
+		return fmt.Errorf("cannot open %v: %v", taskReply.FileName, err)
+	}
+
+	kva := mapf(taskReply.FileName, string(content))
+	fmt.Printf("Processing file with Map task: %v\n", len(kva))
+
+	encoders := make([]*json.Encoder, taskReply.NReduce)
+	for i := 0; i < taskReply.NReduce; i++ {
+		filename := fmt.Sprintf("mr-%d-%d", taskReply.TaskNumber, i)
+
+		outputFile, err := os.Create(filename)
+		defer outputFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("cannot create file %v: %v", filename, err)
+		}
+
+		encoders[i] = json.NewEncoder(outputFile)
+	}
+
+	for _, kv := range kva {
+		bucket := ihash(kv.Key) % taskReply.NReduce
+		if err := encoders[bucket].Encode(&kv); err != nil {
+			return fmt.Errorf("cannot write to intermediate file: %v", err)
+		}
+	}
+
+	if _, err := CompleteTask(taskReply.TaskType, taskReply.TaskNumber); err != nil {
+		return fmt.Errorf("cannot complete task: %v", err)
+	}
+
+	return nil
 }
 
 // send an RPC request to the coordinator, wait for the response.
