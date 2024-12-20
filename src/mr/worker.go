@@ -36,9 +36,9 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		}
 
 		switch taskReply.TaskType {
-		case Map:
+		case MapTask:
 			err = handleMapTask(taskReply, mapf)
-		case Reduce:
+		case ReduceTask:
 			err = fmt.Errorf("reduce handler is not implemented")
 		default:
 			fmt.Printf("unknown task type: %v\n", taskReply.TaskType)
@@ -50,7 +50,6 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 			break
 		}
 
-		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -67,14 +66,15 @@ func GetTask() (*TaskReply, error) {
 	return reply, nil
 }
 
-func CompleteTask(taskType TaskType, taskNumber int) (*CompleteTaskReply, error) {
-	args := &CompleteTaskArgs{
+func ChangeTaskStatus(taskType TaskType, taskNumber int, taskStatus TaskStatus) (*ChangeTaskStatusReply, error) {
+	args := &ChangeTaskStatusArgs{
 		taskType,
 		taskNumber,
+		taskStatus,
 	}
-	reply := &CompleteTaskReply{}
+	reply := &ChangeTaskStatusReply{}
 
-	ok := call("Coordinator.CompleteTask", args, reply)
+	ok := call("Coordinator.ChangeTaskStatus", args, reply)
 
 	if !ok {
 		return nil, fmt.Errorf("task not found")
@@ -113,7 +113,9 @@ func handleMapTask(taskReply *TaskReply, mapf func(string, string) []KeyValue) e
 		}
 	}
 
-	if _, err := CompleteTask(taskReply.TaskType, taskReply.TaskNumber); err != nil {
+	time.Sleep(5 * time.Second)
+
+	if _, err := ChangeTaskStatus(taskReply.TaskType, taskReply.TaskNumber, Processed); err != nil {
 		return fmt.Errorf("cannot complete task: %v", err)
 	}
 

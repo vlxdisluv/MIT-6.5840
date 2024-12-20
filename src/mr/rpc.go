@@ -3,13 +3,6 @@ package mr
 import "os"
 import "strconv"
 
-type TaskType int
-
-const (
-	Map TaskType = iota
-	Reduce
-)
-
 type TaskArgs struct {
 }
 
@@ -18,14 +11,16 @@ type TaskReply struct {
 	TaskType   TaskType
 	TaskNumber int
 	NReduce    int
+	Done       bool
 }
 
-type CompleteTaskArgs struct {
+type ChangeTaskStatusArgs struct {
 	TaskType   TaskType
 	TaskNumber int
+	TaskStatus TaskStatus
 }
 
-type CompleteTaskReply struct{}
+type ChangeTaskStatusReply struct{}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
